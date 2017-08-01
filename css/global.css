@@ -2500,3 +2500,7 @@ input[type="reset"],
 input[type="button"] {
   padding: 16px 20px;
 }
+
+.error-message{
+  padding-left: 0.5em;
+}

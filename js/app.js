@@ -1,6 +1,3 @@
-const testData = require('./../testUserData');
-const testMsgData = require('./../testMessageData');
-
 //A few global constants
 const app_settings = {
   tweet_count: 5,
@@ -137,9 +134,9 @@ function postNewTweetRoute(req, res, next) {
     });    
 }
 
-function getProfileBackground(){   
+function getProfileBackground(){ 
 
-    //Get 5 most recent SENT messages
+    //Get the profile background
     return T.get(
         'users/profile_banner',        
         {   
@@ -199,8 +196,7 @@ function getRecentFriends(){
     
     //Get 5 most recent friends
     return T.get(
-        //'friends/list', 
-        'statuses/user_timeline', 
+        'friends/list',  
         {   
             screen_name: config.twitter_screen_name,
             count: app_settings.friends_count 
@@ -211,9 +207,6 @@ function getRecentFriends(){
             if(typeof result.data.errors !== "undefined"){
                 throw 'Error getting recent friends';
             }
-
-            //TEST value
-           result.data.users = testData;
 
            //Collecting relevant data for the interface
             let friend_list = result.data.users.map(friend=>{
@@ -240,8 +233,7 @@ function getRecentMessages(){
 
     //Get 5 most recent SENT messages
     return T.get(
-        //'direct_messages/sent', 
-        'statuses/user_timeline',        
+        'direct_messages/sent',      
         {   
             count: app_settings.private_msg_count 
         })
@@ -249,10 +241,7 @@ function getRecentMessages(){
 
             if(typeof result.data.errors !== "undefined"){
                 throw 'Error getting recent messages';
-            }
-
-            //TEST value
-           result.data = testMsgData;            
+            }          
 
            //Collecting relevant data for the interface
             let messages = result.data.map(message=>{
