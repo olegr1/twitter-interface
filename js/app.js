@@ -1,12 +1,20 @@
 const testData = require('./../testUserData');
 const testMsgData = require('./../testMessageData');
 
-const config = require('./../config');
-const path = require ('path');
+//A few global constants
+const app_settings = {
+  tweet_count: 5,
+  friends_count: 5,
+  private_msg_count: 5
+}
 
-//Data model to be populated by the API which is used for template rendering
+//Config file for Twit
+const config = require('./../config');
+
+//Data model which is used for template rendering
 const model = {
-    screen_name: config.app_settings.screen_name,
+    screen_name: config.twitter_screen_name,
+    profile_banner: '',
     tweets: [],
     friends: {},
     messages: []
@@ -18,53 +26,84 @@ const Twit = require('twit');
 const moment = require('moment');
 const bodyParser = require('body-parser');
 
+//Instantiating the Express app and Twit
 const app = express();
-const T = new Twit(config.twit_config);
+const T = new Twit(config);
 
 //Configuring the app
-app.use(bodyParser.json());
+const path = require('path');
+
+//Static asset folders for the webpage
 app.use('/css', express.static(path.join(__dirname, './../css')));
 app.use('/images', express.static(path.join(__dirname, './../images')));
 app.use('/js', express.static(path.join(__dirname, './../client_js')));
+
+app.use(bodyParser.json());
 
 app.set('views', path.join(__dirname, './../views'));
 app.set('view engine', 'pug');
 app.set('view options', { layout: true })
 
-//Handle Get request on the main route
-app.get('/', handleDefaultRoute);
+//Handle GET request on the main route
+app.get('/', defaultRoute);
 
 //Handle posting of a new tweet
-app.post('/post-tweet', handleTweetPosting);
+app.post('/post-tweet', postNewTweetRoute);
+
+//Handle error route
+app.get('/error', errorRoute);
+
+//Initiate a 404 if a route is not found
+app.use((req, res, next)=>{
+    let err = new Error("Page not found!")
+    res.status = 404;
+    next(err);
+});
+
+//Redirect all otherwise unhandled errors in the app to the friendly error route
+app.use((err, req, res, next)=>{
+    res.redirect("/error");
+});
 
 //Listen for requests
 app.listen(3000, ()=>{
     console.log("Listening on port 3000");
 });
 
+//Error route handler
+function errorRoute(req, res){
+    res.render("error", {message : "Ooops, something went wrong"});
+}
 
-function handleDefaultRoute(req, res){ 
+function defaultRoute(req, res){     
 
-    //Once all the data from all 3 API endpoints arrives, populate the model
+    //Once the data from all API endpoints arrives, populate the model
     Promise.all([
         getRecentTweets(),
         getRecentFriends(),
-        getRecentMessages()
+        getRecentMessages(),
+        getProfileBackground()
+
     ]).then(data => {
+        model.screen_name = config.twitter_screen_name;
         model.tweets = data[0];
         model.friends = data[1];
         model.messages = data[2];
+        model.profile_banner = data[3];
 
-        //Pass the data model to PUG to render
+        //Pass the data model to Pug to render the page
         res.render("index", model);
     }) 
     .catch(err=>{
-        //Handle error
-        return res.status("500").send(err.message);
+        //Initiate an error
+        console.log("Failed to collect data from all APIs");
+        let error = new Error("Server error")
+        res.status = 500;
+        next(error);
     });
 }
 
-function handleTweetPosting(req, res) {
+function postNewTweetRoute(req, res, next) {
 
     //Send the tweet text received from the AJAX POST request to the Twitter API
     T.post(
@@ -72,23 +111,52 @@ function handleTweetPosting(req, res) {
         { status: req.body.tweet }
     )
     .then(result=>{
+
+        //If the response has errors an errors array, cause the promise to reject
+        if(typeof result.data.errors !== "undefined"){
+            throw 'Error posting a tweet';
+        }
+
         //Once the API updates the list with a new Tweet..
         getRecentTweets().then((data)=>{
             model.tweets = data;
 
-            let tweets = "<div>Error rendering tweets</div>";
-
-            //Render only the Tweets list partial and send the HTML to the client
-            app.render('partial/timeline', model,function(err,html) {                    
-                tweets = html;
+            //...render only the Tweets list partial and send the resulting HTML to the client
+            app.render('partial/timeline', model, function(err, html) {     
+               res.send(html);
             });
-            return res.send(tweets);
+
+        }).catch(err=>{
+            console.log(err);
         });               
     })
     .catch(err=>{
-        //Handle error
-        return res.status("500").send(err.message);
+
+        //Render an error message instead of tweets
+        res.send('<div style="padding:1em;">Ooops, something went wrong</div>');
     });    
+}
+
+function getProfileBackground(){   
+
+    //Get 5 most recent SENT messages
+    return T.get(
+        'users/profile_banner',        
+        {   
+            screen_name: config.twitter_screen_name
+        })
+        .then(result=>{   
+
+            //If the response has errors an errors array, cause the promise to reject
+            if(typeof result.data.errors !== "undefined"){
+                throw 'Error getting profile banner';
+            }
+
+            return result.data.sizes.web.url;              
+        })
+        .catch(err=>{
+            console.log(err);            
+        });   
 }
 
 function getRecentTweets(){ 
@@ -97,10 +165,15 @@ function getRecentTweets(){
     return T.get(
         'statuses/user_timeline', 
         {   
-            screen_name: config.app_settings.twitter_screen_name,
-            count: config.app_settings.tweet_count 
+            screen_name: config.twitter_screen_name,
+            count: app_settings.tweet_count 
         })
         .then(result=>{
+
+            //If the response has errors an errors array, cause the promise to reject
+            if(typeof result.data.errors !== "undefined"){
+                throw 'Error getting recent tweets';
+            }
 
             //Collecting relevant data for the interface
             let tweets = result.data.map(tweet=>{
@@ -113,14 +186,13 @@ function getRecentTweets(){
                     favorites: tweet.favorite_count,
                     date: moment(new Date(tweet.created_at)).format('HH:mm a, DD/MM/YYYY')
                 };
-        });            
+            });            
 
-        return tweets;            
-    })
-    .catch(err=>{
-        //Handle error
-        return res.status("500").send(err.message);
-    });   
+            return tweets;            
+        })
+        .catch(err=>{
+            console.log(err);
+        });   
 }
 
 function getRecentFriends(){ 
@@ -128,12 +200,17 @@ function getRecentFriends(){
     //Get 5 most recent friends
     return T.get(
         //'friends/list', 
-        'statuses/oembed', 
+        'statuses/user_timeline', 
         {   
-            screen_name: config.app_settings.twitter_screen_name,
-            count: config.app_settings.friends_count 
+            screen_name: config.twitter_screen_name,
+            count: app_settings.friends_count 
         })
         .then(result=>{
+
+            //If the response has errors an errors array, cause the promise to reject
+            if(typeof result.data.errors !== "undefined"){
+                throw 'Error getting recent friends';
+            }
 
             //TEST value
            result.data.users = testData;
@@ -155,8 +232,7 @@ function getRecentFriends(){
             return friends;            
         })
         .catch(err=>{
-            //Handle error
-            return res.status("500").send(err.message);
+            console.log(err);
         });   
 }
 
@@ -165,11 +241,15 @@ function getRecentMessages(){
     //Get 5 most recent SENT messages
     return T.get(
         //'direct_messages/sent', 
-        'statuses/oembed',        
+        'statuses/user_timeline',        
         {   
-            count: config.app_settings.private_msg_count 
+            count: app_settings.private_msg_count 
         })
         .then(result=>{
+
+            if(typeof result.data.errors !== "undefined"){
+                throw 'Error getting recent messages';
+            }
 
             //TEST value
            result.data = testMsgData;            
@@ -185,6 +265,6 @@ function getRecentMessages(){
             return messages;              
         })
         .catch(err=>{
-            return res.status("500").send(err.message);
+            console.log(err);
         });   
 }

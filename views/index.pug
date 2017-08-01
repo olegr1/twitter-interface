@@ -47,3 +47,16 @@ block content
                                         img(src='images/f-spore.png')
                                     p.app--message--text=message.text
                                     p.app--message--timestamp=message.date
+        .app--tweet
+            form
+                .circle--fluid
+                    .circle--fluid--cell.circle--fluid--primary.align-bottom.app--tweet--post
+                        .app--avatar(style='background-image: url(images/m-spore.png)')
+                            img(src='images/m-spore.png')
+                        textarea#tweet-textarea.circle--textarea--input(placeholder="What's happening?")
+                        strong#tweet-char.app--tweet--char 140
+                    .circle--fluid--cell.align-bottom
+                        button.button-primary Tweet
+        //JS
+        <script src="http://code.jquery.com/jquery-3.2.1.min.js"></script>
+        script(src="js/scripts.js")

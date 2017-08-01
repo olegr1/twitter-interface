@@ -14,17 +14,17 @@
         $tweetFormField = $tweetForm.find("#tweet-textarea");  
         $tweetButton = $tweetForm.find("button");
         $tweetCharCountElement = $tweetForm.find(".app--tweet--char");
-        $tweetList = $(".app--tweet--list")
+        $tweetList = $(".app--tweet--list");
         
         $tweetFormField.value = "";       
 
         $tweetForm.on("submit", (event)=>{
             event.preventDefault();
 
-            //Make sure the tweet is valid
+            //Make sure the tweet is valid...
             validate();
             
-            //and post it to the dedicated route
+            //...and post it to the dedicated route
             $.ajax({
                 type: 'POST',
                 data: JSON.stringify({tweet: $tweetFormField.val()}),
@@ -34,7 +34,7 @@
             .done(function(data) {
 
                 //If the posting was successful, 
-                //clear the field and replace the tweet list with the one received from teh server
+                //clear the field and replace the tweet list with the one received from the server
                 $tweetFormField.val("");
                 $tweetList.html(data);
             })
